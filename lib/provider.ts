@@ -1,8 +1,18 @@
 // lib/provider.ts
 import NodeCache from "node-cache";
+import {
+  evaluateSeverityFromTexts,
+  formatSeveritySummary,
+  SeverityAssessment,
+} from "../utils/severity";
 
 type SuggestResult = { name: string }[] | string[];
-type CheckResult = { result: string; source?: string; raw?: any };
+type CheckResult = {
+  result: string;
+  source?: string;
+  raw?: any;
+  severity?: SeverityAssessment & { totalReports: number };
+};
 
 const CACHE_TTL = Number(process.env.CACHE_TTL || 3600);
 const cache = new NodeCache({ stdTTL: CACHE_TTL, checkperiod: 120 });
@@ -91,6 +101,7 @@ export async function openfdaCheck(drugA: string, drugB: string): Promise<CheckR
 
     const reactionCounts: Record<string, number> = {};
     const seriousnessCounts: Record<string, number> = {};
+    const severityTextSamples: string[] = [];
     const examples: string[] = [];
 
     for (const ev of returned) {
@@ -102,12 +113,17 @@ export async function openfdaCheck(drugA: string, drugB: string): Promise<CheckR
             (r?.reactionmeddrapt ? String(r.reactionmeddrapt).trim() : "");
           if (!term) continue;
           reactionCounts[term] = (reactionCounts[term] || 0) + 1;
+          severityTextSamples.push(term);
         }
       }
 
       const outcome = ev?.serious ?? ev?.outcome ?? ev?.seriousness ?? null;
       const sKey = String(outcome ?? (ev?.seriousnessdeath ? "death" : "unknown"));
       seriousnessCounts[sKey] = (seriousnessCounts[sKey] || 0) + 1;
+
+      if (ev?.seriousnessdeath === "1") severityTextSamples.push("death");
+      if (ev?.seriousnesshospitalization === "1") severityTextSamples.push("hospitalization");
+      if (ev?.serious === "1") severityTextSamples.push("serious");
 
       if (examples.length < 2) {
         try {
@@ -139,7 +155,13 @@ export async function openfdaCheck(drugA: string, drugB: string): Promise<CheckR
     reactionEntries.sort((a, b) => b[1] - a[1]);
     const topReactions = reactionEntries.slice(0, 5);
 
-    let summary = `openFDA: found ${totalMatches} matching adverse-event reports for the queried products (analyzing up to ${returned.length} records).\n\n`;
+    const severityAssessment = evaluateSeverityFromTexts([
+      ...severityTextSamples,
+      ...topReactions.map(([term]) => term),
+    ]);
+
+    let summary = `Severity assessment: ${formatSeveritySummary(severityAssessment)}\n\n`;
+    summary += `openFDA: found ${totalMatches} matching adverse-event reports for the queried products (analyzing up to ${returned.length} records).\n\n`;
 
     if (topReactions.length > 0) {
       summary += `Top reported reactions:\n`;
@@ -179,6 +201,7 @@ export async function openfdaCheck(drugA: string, drugB: string): Promise<CheckR
         top_reactions: topReactions,
         seriousnessCounts,
       },
+      severity: { ...severityAssessment, totalReports: totalMatches },
     };
 
     cacheSet(key, out, Math.max(60, CACHE_TTL));

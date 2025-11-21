@@ -22,6 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       result: result?.result ?? "No result text.",
       raw: result?.raw ?? {},
       source: result?.source ?? "unknown",
+      severity: result?.severity ?? null,
     });
 
   } catch (err: any) {
