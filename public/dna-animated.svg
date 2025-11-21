@@ -1,0 +1,28 @@
+<svg width="1600" height="600" viewBox="0 0 1600 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="helix" x1="0%" x2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#ec4899"/>
+    </linearGradient>
+  </defs>
+
+  <!-- TOP CURVE -->
+  <path id="top" fill="none" stroke="url(#helix)" stroke-width="8" stroke-linecap="round"
+    d="M0 300 Q100 120 200 300 T400 300 T600 300 T800 300 T1000 300 T1200 300 T1400 300 T1600 300">
+    <animate attributeName="d" dur="6s" repeatCount="indefinite"
+      values="
+        M0 300 Q100 120 200 300 T400 300 T600 300 T800 300 T1000 300 T1200 300 T1400 300 T1600 300;
+        M0 300 Q100 200 200 300 T400 300 T600 300 T800 300 T1000 300 T1200 300 T1400 300 T1600 300;
+        M0 300 Q100 120 200 300 T400 300 T600 300 T800 300 T1000 300 T1200 300 T1400 300 T1600 300" />
+  </path>
+
+  <!-- BOTTOM CURVE -->
+  <path id="bottom" fill="none" stroke="url(#helix)" stroke-width="8" stroke-linecap="round"
+    d="M0 300 Q100 480 200 300 T400 300 T600 300 T800 300 T1000 300 T1200 300 T1400 300 T1600 300">
+    <animate attributeName="d" dur="6s" repeatCount="indefinite"
+      values="
+        M0 300 Q100 480 200 300 T400 300 T600 300 T800 300 T1000 300 T1200 300 T1400 300 T1600 300;
+        M0 300 Q100 400 200 300 T400 300 T600 300 T800 300 T1000 300 T1200 300 T1400 300 T1600 300;
+        M0 300 Q100 480 200 300 T400 300 T600 300 T800 300 T1000 300 T1200 300 T1400 300 T1600 300" />
+  </path>
+</svg>
