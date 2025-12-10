@@ -17554,7 +17554,11 @@ const drugWords = [
   "Imciromab pentetate",
   "Cetyl oleate",
   "Cetyl myristoleate",
-  "Cetyl palmitoleate"
+  "Cetyl palmitoleate",
+  "Vitamin D3",
+"Vitamin D4",
+  "Vitamin D5",
+  "Vitamin C"
 ];
 
 export default drugWords;

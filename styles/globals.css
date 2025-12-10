@@ -15,14 +15,14 @@
   --shadow-soft: 0 26px 70px rgba(15, 23, 42, 0.12);
   --severity-none-bg: #e2f6ff;
   --severity-none-border: #7dd3fc;
-  --severity-minor-bg: #f1f5f9;
+  --severity-minor-bg: #c9facb;
   --severity-minor-border: #94a3b8;
-  --severity-moderate-bg: #fef9c3;
+  --severity-moderate-bg: #fdf8bb;
   --severity-moderate-border: #facc15;
-  --severity-serious-bg: #fee2e2;
-  --severity-serious-border: #ef4444;
-  --severity-contra-bg: #fee4e4;
-  --severity-contra-border: #b91c1c;
+  --severity-serious-bg: #faecec;
+  --severity-serious-border: #fc4747;
+  --severity-contra-bg: #fdcdcd;
+  --severity-contra-border: #911313;
 }
 
 * {

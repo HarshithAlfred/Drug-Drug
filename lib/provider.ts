@@ -64,7 +64,19 @@ export async function rxnormSuggest(q: string): Promise<SuggestResult> {
   }
 }
 
-/* ---------- openFDA check ---------- */
+/* ---------- OPENFDA CHECK ---------- */
+export type SeverityLevel = "none" | "minor" | "moderate" | "serious" | "contraindicated";
+
+export const SEVERITY_WEIGHTS: Record<SeverityLevel, number> = {
+  none: 0,
+  minor: 1,
+  moderate: 2,
+  serious: 3,
+  contraindicated: 4,
+};
+
+export const MAX_SEVERITY_WEIGHT = Math.max(...Object.values(SEVERITY_WEIGHTS));
+
 export async function openfdaCheck(drugA: string, drugB: string): Promise<CheckResult> {
   const a = (drugA || "").trim();
   const b = (drugB || "").trim();
@@ -99,32 +111,63 @@ export async function openfdaCheck(drugA: string, drugB: string): Promise<CheckR
     const totalMatches = json?.meta?.results?.total ?? 0;
     const returned = Array.isArray(json?.results) ? json.results : [];
 
+    // counters for severity flags and reactions
+    let totalFetched = returned.length;
+    let deathCount = 0;
+    let lifeThreatCount = 0;
+    let seriousCount = 0; // any event with serious === "1"
+    let hospCount = 0;
+    let disablingCount = 0;
+    let otherSeriousCount = 0;
+    let nonSeriousButWithReactions = 0;
+
     const reactionCounts: Record<string, number> = {};
-    const seriousnessCounts: Record<string, number> = {};
     const severityTextSamples: string[] = [];
     const examples: string[] = [];
 
     for (const ev of returned) {
-      const reactions = ev?.patient?.reaction ?? [];
-      if (Array.isArray(reactions)) {
-        for (const r of reactions) {
-          const term =
-            (typeof r?.reactionmeddrapt === "string" && r.reactionmeddrapt.trim()) ||
-            (r?.reactionmeddrapt ? String(r.reactionmeddrapt).trim() : "");
-          if (!term) continue;
-          reactionCounts[term] = (reactionCounts[term] || 0) + 1;
-          severityTextSamples.push(term);
-        }
+      const reactions = Array.isArray(ev?.patient?.reaction) ? ev.patient.reaction : [];
+
+      // accumulate reaction terms
+      for (const r of reactions) {
+        const term =
+          (typeof r?.reactionmeddrapt === "string" && r.reactionmeddrapt.trim()) ||
+          (r?.reactionmeddrapt ? String(r.reactionmeddrapt).trim() : "");
+        if (!term) continue;
+        reactionCounts[term] = (reactionCounts[term] || 0) + 1;
+        severityTextSamples.push(term);
       }
 
-      const outcome = ev?.serious ?? ev?.outcome ?? ev?.seriousness ?? null;
-      const sKey = String(outcome ?? (ev?.seriousnessdeath ? "death" : "unknown"));
-      seriousnessCounts[sKey] = (seriousnessCounts[sKey] || 0) + 1;
+      // Normalize flags - openFDA sometimes uses "1"/"0" strings
+      const isSerious = String(ev?.serious ?? "") === "1";
+      if (isSerious) seriousCount++;
 
-      if (ev?.seriousnessdeath === "1") severityTextSamples.push("death");
-      if (ev?.seriousnesshospitalization === "1") severityTextSamples.push("hospitalization");
-      if (ev?.serious === "1") severityTextSamples.push("serious");
+      if (String(ev?.seriousnessdeath ?? "") === "1") {
+        deathCount++;
+        severityTextSamples.push("death");
+      }
+      if (String(ev?.seriousnesslifethreatening ?? "") === "1") {
+        lifeThreatCount++;
+        severityTextSamples.push("life-threatening");
+      }
+      if (String(ev?.seriousnesshospitalization ?? "") === "1") {
+        hospCount++;
+        severityTextSamples.push("hospitalization");
+      }
+      if (String(ev?.seriousnessdisabling ?? "") === "1") {
+        disablingCount++;
+        severityTextSamples.push("disabling");
+      }
+      if (String(ev?.seriousnessother ?? "") === "1") {
+        otherSeriousCount++;
+        severityTextSamples.push("other-serious");
+      }
 
+      if (!isSerious && reactions.length > 0) {
+        nonSeriousButWithReactions++;
+      }
+
+      // keep a couple example rows (same format as earlier)
       if (examples.length < 2) {
         try {
           const age =
@@ -139,9 +182,9 @@ export async function openfdaCheck(drugA: string, drugB: string): Promise<CheckR
                 ? "female"
                 : String(ev.patient.patientsex)
               : "unknown sex";
-          const reactionList = (Array.isArray(reactions) ? reactions.map((r: any) => r?.reactionmeddrapt).filter(Boolean) : []).slice(0, 6);
-          const reportId = ev?.safetyreportid ?? ev?.safetyreportid;
-          const example = `Case ${reportId ?? "(id N/A)"} — ${age}, ${sex}. Reactions: ${
+          const reactionList = (reactions).map((r: any) => r?.reactionmeddrapt).filter(Boolean).slice(0, 6);
+          const reportId = ev?.safetyreportid ?? "(id N/A)";
+          const example = `Case ${reportId} — ${age}, ${sex}. Reactions: ${
             reactionList.length ? reactionList.join(", ") : "N/A"
           }.`;
           examples.push(example);
@@ -151,16 +194,48 @@ export async function openfdaCheck(drugA: string, drugB: string): Promise<CheckR
       }
     }
 
+    // prepare top reactions
     const reactionEntries = Object.entries(reactionCounts);
     reactionEntries.sort((a, b) => b[1] - a[1]);
     const topReactions = reactionEntries.slice(0, 5);
 
-    const severityAssessment = evaluateSeverityFromTexts([
+    // compute aggregate severity using weights across records (counts-based)
+    const aggSeverity = computeAggregateSeverity(totalFetched, {
+      death: deathCount,
+      lifeThreat: lifeThreatCount,
+      serious: seriousCount,
+      hospitalization: hospCount,
+      disabling: disablingCount,
+      otherSerious: otherSeriousCount,
+      nonSeriousReactions: nonSeriousButWithReactions,
+    });
+
+    // also get text-based assessment for enrichment (not authoritative)
+    const textAssessment = evaluateSeverityFromTexts([
       ...severityTextSamples,
       ...topReactions.map(([term]) => term),
     ]);
 
-    let summary = `Severity assessment: ${formatSeveritySummary(severityAssessment)}\n\n`;
+    // choose final severity: prefer aggregated counts; if text escalates beyond a threshold, note it
+    let finalSeverity = aggSeverity;
+    // if (SEVERITY_WEIGHTS[textAssessment.level] > SEVERITY_WEIGHTS[finalSeverity.level]) {
+    //   // only escalate if text's weight is strictly higher and percentage is non-trivial
+    //   if (textAssessment.percentage >= 40) {
+    //     finalSeverity = {
+    //       level: textAssessment.level,
+    //       percentage: Math.max(finalSeverity.percentage, textAssessment.percentage),
+    //       matchedLevel: textAssessment.matchedLevel,
+    //       matchedKeyword: textAssessment.matchedKeyword,
+    //       matchedText: textAssessment.matchedText,
+    //     };
+    //   } else {
+    //     // keep aggSeverity but preserve text match info in matchedText
+    //     finalSeverity = { ...finalSeverity, matchedText: textAssessment.matchedText, matchedKeyword: textAssessment.matchedKeyword };
+    //   }
+    // }
+
+    // build summary
+    let summary = `Severity assessment: ${formatSeveritySummary(finalSeverity)}\n\n`;
     summary += `openFDA: found ${totalMatches} matching adverse-event reports for the queried products (analyzing up to ${returned.length} records).\n\n`;
 
     if (topReactions.length > 0) {
@@ -174,14 +249,12 @@ export async function openfdaCheck(drugA: string, drugB: string): Promise<CheckR
       summary += `No individual reactions extracted from the fetched records.\n\n`;
     }
 
-    const seriousEntries = Object.entries(seriousnessCounts);
-    if (seriousEntries.length > 0) {
-      summary += `Seriousness / outcome distribution among fetched records:\n`;
-      for (const [k, v] of seriousEntries) {
-        summary += ` • ${k}: ${v}\n`;
-      }
-      summary += `\n`;
-    }
+    summary += `Seriousness / outcome counts in fetched records:\n`;
+    summary += ` • serious(flag): ${seriousCount}\n`;
+    summary += ` • hospitalization: ${hospCount}\n`;
+    summary += ` • disabling: ${disablingCount}\n`;
+    summary += ` • life-threatening: ${lifeThreatCount}\n`;
+    summary += ` • death: ${deathCount}\n\n`;
 
     if (examples.length > 0) {
       summary += `Example case(s):\n`;
@@ -199,9 +272,18 @@ export async function openfdaCheck(drugA: string, drugB: string): Promise<CheckR
         sample_count: returned.length,
         sample_records_head: returned.slice(0, 6),
         top_reactions: topReactions,
-        seriousnessCounts,
+        counts: {
+          totalFetched,
+          deathCount,
+          lifeThreatCount,
+          seriousCount,
+          hospCount,
+          disablingCount,
+          otherSeriousCount,
+          nonSeriousButWithReactions,
+        },
       },
-      severity: { ...severityAssessment, totalReports: totalMatches },
+      severity: { ...finalSeverity, totalReports: totalMatches },
     };
 
     cacheSet(key, out, Math.max(60, CACHE_TTL));
@@ -213,6 +295,76 @@ export async function openfdaCheck(drugA: string, drugB: string): Promise<CheckR
     return r;
   }
 }
+
+// --- Helper: computeAggregateSeverity (counts -> continuous percentage + level) ---
+
+// Wilson score lower bound for proportion (confidence 95%)
+function wilsonLowerBound(successes: number, trials: number, z = 1.96): number {
+  if (trials === 0) return 0;
+  const phat = successes / trials;
+  const z2 = z * z;
+  const denom = 1 + z2 / trials;
+  const centre = phat + z2 / (2 * trials);
+  const margin = z * Math.sqrt((phat * (1 - phat) + z2 / (4 * trials)) / trials);
+  const lower = (centre - margin) / denom;
+  console.log("wilsonLowerBound:", { successes, trials, phat, lower });
+  console.log("wilsonLowerBound debug:", { centre, margin, denom });
+  return Math.max(0, lower);
+}
+
+function computeAggregateSeverity(
+  total: number,
+  counts: {
+    death: number;
+    lifeThreat: number;
+    serious: number;
+    hospitalization: number;
+    disabling: number;
+    otherSerious: number;
+    nonSeriousReactions: number;
+  }
+): SeverityAssessment {
+  if (!total || total <= 0) {
+    return { level: "none", percentage: 0 };
+  }
+
+  // conservative escalation rules for death/life-threat
+  const deathRatio = counts.death / total;
+  const lifeThreatRatio = counts.lifeThreat / total;
+  const criticalByCount = counts.death >= 12 || counts.lifeThreat >= 6;
+  const criticalByRatio = deathRatio >= 0.12 || lifeThreatRatio >= 0.06; // 6%
+
+  // compute conservative serious proportion using Wilson lower bound (95% CI)
+  const seriousLower = wilsonLowerBound(counts.serious, total, 1.96); // value in [0,1]
+  const seriousPctLower = Math.round(seriousLower * 100);
+
+  // immediate escalation to contraindicated only if conservative death/life-threat thresholds met
+  // if (criticalByCount || criticalByRatio) {
+  //   return { level: "contraindicated", percentage: 100, matchedLevel: "contraindicated", matchedText: `death:${counts.death},lifeThreat:${counts.lifeThreat}`, };
+  // }
+
+  // map seriousLower into bands (tunable)
+  // minor: >=5%, moderate: >=20%, serious: >=50%, contra: >=75%
+  console.log("computeAggregateSeverity:", { seriousLower, seriousPctLower });
+  if (seriousLower >= 0.75) {
+    return { level: "contraindicated", percentage: Math.min(100, seriousPctLower), matchedLevel: "contraindicated" };
+  }
+  if (seriousLower >= 0.50) {
+    return { level: "serious", percentage: Math.min(100, seriousPctLower), matchedLevel: "serious" };
+  }
+  if (seriousLower >= 0.20) {
+    return { level: "moderate", percentage: Math.min(100, seriousPctLower), matchedLevel: "moderate" };
+  }
+  if (seriousLower >= 0.05) {
+    return { level: "minor", percentage: Math.min(100, seriousPctLower), matchedLevel: "minor" };
+  }
+
+  return { level: "none", percentage: Math.min(100, seriousPctLower), matchedLevel: "none" };
+
+}
+
+
+
 
 /* ---------- Lexigram extract (optional) ---------- */
 export async function lexigramExtract(text: string): Promise<CheckResult> {

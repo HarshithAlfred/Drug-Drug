@@ -191,8 +191,12 @@ export default function Home() {
             </thead>
             <tbody>
               <tr>
-                <td>🟢 SAFE</td>
+                <td>🔵 SAFE</td>
                 <td>No known harmful interaction.</td>
+              </tr>
+              <tr>
+                <td>🟢 MINOR</td>
+                <td>Very Minor interaction; unlikely to cause harm.</td>
               </tr>
               <tr>
                 <td>🟡 MODERATE</td>

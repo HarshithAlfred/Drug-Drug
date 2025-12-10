@@ -15,28 +15,38 @@ const KEYWORD_GROUPS: Array<{ level: SeverityLevel; keywords: RegExp[] }> = [
     level: "contraindicated",
     keywords: [
       /contraindicat/i,
-      /do not use/i,
+      /do not (?:use|combine)/i,
+      /should not be (?:used|taken) together/i,
       /absolute contraindication/i,
+      /avoid (?:combination|co[- ]administration)/i,
     ],
   },
   {
     level: "serious",
     keywords: [
       /life[- ]?threat/i,
-      /serious/i,
-      /severe/i,
       /fatal/i,
       /death/i,
+      /cardiac arrest/i,
+      /anaphylaxis/i,
+      /permanent (?:damage|disability)/i,
+      /requires hospitalization/i,
+      /respiratory failure/i,
     ],
   },
   {
     level: "moderate",
     keywords: [
+      /serious/i,
+      /severe/i,
       /major/i,
       /significant/i,
-      /monitor/i,
+      /monitor(?: closely)?/i,
+      /use with caution/i,
       /caution/i,
-      /dose adjustment/i,
+      /dose (?:adjustment|modification)/i,
+      /risk of/i,
+      /interaction/i,
     ],
   },
   {
@@ -46,6 +56,8 @@ const KEYWORD_GROUPS: Array<{ level: SeverityLevel; keywords: RegExp[] }> = [
       /may cause/i,
       /limited/i,
       /minor/i,
+      /transient/i,
+      /generally well tolerated/i,
     ],
   },
 ];
@@ -83,9 +95,16 @@ function matchLevel(text: string): { level: SeverityLevel; keyword: string } | n
 export function evaluateSeverityFromTexts(texts: Array<string | undefined | null>): SeverityAssessment {
   if (!Array.isArray(texts) || texts.length === 0) return DEFAULT_ASSESSMENT;
 
+  const levelCounts: Record<SeverityLevel, number> = {
+    none: 0,
+    minor: 0,
+    moderate: 0,
+    serious: 0,
+    contraindicated: 0,
+  };
+
+  const firstMatchInfo: Partial<Record<SeverityLevel, { keyword: string; text: string }>> = {};
   let highestLevel: SeverityLevel = "none";
-  let matchedKeyword: string | undefined;
-  let matchedText: string | undefined;
 
   for (const raw of texts) {
     if (!raw) continue;
@@ -93,21 +112,50 @@ export function evaluateSeverityFromTexts(texts: Array<string | undefined | null
     const match = matchLevel(text);
     if (!match) continue;
 
+    levelCounts[match.level] += 1;
+    if (!firstMatchInfo[match.level]) {
+      firstMatchInfo[match.level] = {
+        keyword: match.keyword,
+        text: text.slice(0, 280),
+      };
+    }
+
     if (SEVERITY_WEIGHTS[match.level] > SEVERITY_WEIGHTS[highestLevel]) {
       highestLevel = match.level;
-      matchedKeyword = match.keyword;
-      matchedText = text.slice(0, 280);
     }
 
     if (highestLevel === "contraindicated") break;
   }
 
+  if (highestLevel === "none") {
+    return DEFAULT_ASSESSMENT;
+  }
+
+  let finalLevel = highestLevel;
+
+  if (
+    finalLevel === "serious" &&
+    levelCounts.serious <= 1 &&
+    levelCounts.moderate >= 1
+  ) {
+    finalLevel = "moderate";
+  } else if (
+    finalLevel === "moderate" &&
+    levelCounts.moderate <= 1 &&
+    levelCounts.minor >= 2
+  ) {
+    finalLevel = "minor";
+  }
+
+  const matchedInfo =
+    firstMatchInfo[finalLevel] || firstMatchInfo[highestLevel];
+
   return {
-    level: highestLevel,
-    percentage: weightToPercentage(SEVERITY_WEIGHTS[highestLevel]),
-    matchedLevel: highestLevel === "none" ? undefined : highestLevel,
-    matchedKeyword,
-    matchedText,
+    level: finalLevel,
+    percentage: weightToPercentage(SEVERITY_WEIGHTS[finalLevel]),
+    matchedLevel: finalLevel,
+    matchedKeyword: matchedInfo?.keyword,
+    matchedText: matchedInfo?.text,
   };
 }
 
