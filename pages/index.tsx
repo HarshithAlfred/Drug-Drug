@@ -11,15 +11,13 @@ import {
 
 type SeverityPayload = (SeverityAssessment & { totalReports?: number }) | null;
 
-const severityClassMap: Record<SeverityLevel, string> = {
-  none: "severity-none",
-  minor: "severity-minor",
-  moderate: "severity-moderate",
-  serious: "severity-serious",
-  contraindicated: "severity-contra",
+const severityLabelClassMap: Record<SeverityLevel, string> = {
+  none: "severity-text-none",
+  minor: "severity-text-minor",
+  moderate: "severity-text-moderate",
+  serious: "severity-text-serious",
+  contraindicated: "severity-text-contra",
 };
-
-const defaultAssessment: SeverityAssessment = { level: "none", percentage: 0 };
 
 export default function Home() {
   const [drugA, setDrugA] = useState("");
@@ -57,22 +55,21 @@ export default function Home() {
     }
   }
 
-  const severityAssessment = useMemo(
-    () => severity ?? defaultAssessment,
+  const severitySummary = useMemo(
+    () => (severity ? formatSeveritySummary(severity) : null),
     [severity]
   );
 
-  const severityLevel = severityAssessment.level ?? "none";
-  const severitySummary = useMemo(
-    () => formatSeveritySummary(severityAssessment),
-    [severityAssessment]
-  );
-  const severityMeta = SEVERITY_DISPLAY_META[severityLevel];
-  const severityPercent = Math.round(severityAssessment.percentage);
-  const reportsCopy = severity?.totalReports
-    ? `Total matching FDA reports: ${severity.totalReports}`
-    : "No matching FDA reports yet for this combination.";
-  const resultClassName = `results ${severityClassMap[severityLevel]}`;
+  const severityMeta = severity ? SEVERITY_DISPLAY_META[severity.level] : null;
+  const reportsCopy = severity
+    ? severity.totalReports
+      ? `Total matching FDA reports: ${severity.totalReports}`
+      : "No matching FDA reports yet for this combination."
+    : null;
+  const severityLevelClass = severity ? severityLabelClassMap[severity.level] : "";
+  const resultClassName = "results";
+  const showPlaceholder = !severity && !result;
+  const showNoInteractionWarning = Boolean(severity) && severity?.level === "none";
 
   return (
     <main className="page-wrap">
@@ -100,7 +97,7 @@ export default function Home() {
                   label=""
                   value={drugB}
                   onChange={setDrugB}
-                  placeholder="Type second drug name"
+                  placeholder="Type drug name (e.g., Aspirine)"
                   id="drugB"
                 />
               </div>
@@ -128,25 +125,56 @@ export default function Home() {
             </div>
 
             <div className={resultClassName} role="status" aria-live="polite">
-              <div className="results-heading">
-                <span className="results-level">{severityMeta.label}</span>
-                <span className="results-percent">{severityPercent}%</span>
-              </div>
-              <p className="results-summary">{severitySummary}</p>
-              <p className="results-hint">{reportsCopy}</p>
-              {severity?.matchedKeyword ? (
+              {severityMeta && severitySummary ? (
+                <>
+                  <div className="results-heading">
+                    <span className={`results-level ${severityLevelClass}`}>
+                      {severityMeta.label}
+                    </span>
+                  </div>
+                  <p className="results-summary">{severitySummary}</p>
+                  {reportsCopy ? <p className="results-hint">{reportsCopy}</p> : null}
+                  {severity?.matchedKeyword ? (
+                    <p className="results-hint">
+                      Matched keyword “{severity.matchedKeyword}” in FDA text.
+                    </p>
+                  ) : null}
+                  {showNoInteractionWarning ? (
+                    <div className="no-interactions-error" role="alert">
+                      <div className="error-box">
+                        <svg
+                          className="exclamation-error"
+                          viewBox="0 0 20 20"
+                          aria-hidden="true"
+                        >
+                          <path
+                            fill="currentColor"
+                            d="M10 1.5a1 1 0 0 1 .88.51l8.5 14.73A1 1 0 0 1 18.5 18H1.5a1 1 0 0 1-.88-1.26l8.5-14.73A1 1 0 0 1 10 1.5Zm0 4.1a.9.9 0 0 0-.9.97l.3 5.32a.6.6 0 0 0 1.2 0l.3-5.32A.9.9 0 0 0 10 5.6Zm0 8.4a1.1 1.1 0 1 0 0 2.2 1.1 1.1 0 0 0 0-2.2Z"
+                          />
+                        </svg>
+                        <span className="error-message">
+                          <p className="warning">Warning:</p>
+                          <p className="warning-text">
+                            There were no interactions found. It does not necessarily mean that no interactions exist.
+                          </p>
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
+                  
+                </>
+              ) : showPlaceholder ? (
                 <p className="results-hint">
-                  Matched keyword “{severity.matchedKeyword}” in FDA text.
+                  Results will appear here after you press <strong>Check Interaction</strong>.
                 </p>
               ) : null}
               <div className="results-body">
                 {result ? (
                   <pre className="results-text">{result}</pre>
-                ) : (
+                ) : showPlaceholder ? (
                   <span>
-                    Results will appear here after you press <strong>Check Interaction</strong>.
-                  </span>
-                )}
+                   </span>
+                ) : null}
               </div>
             </div>
           </div>
