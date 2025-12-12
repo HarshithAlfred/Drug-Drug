@@ -45,7 +45,7 @@ If openFDA does not provide a strong signal, the UI falls back to "No known inte
 - `lib/provider.ts` – fetches openFDA data, builds summaries, caches responses, and calls the severity helper.
 - `utils/severity.ts` – shared keyword/weight definitions.
 - `styles/globals.css` – Tailwind base imports plus bespoke CSS for gradients, button animation, loader pills, and severity table.
-
+- `design to compy/` – source assets (HTML/CSS/JS + `drug.png` favicon, `dna-animated.svg`).
 
 ## Deployment Notes
 

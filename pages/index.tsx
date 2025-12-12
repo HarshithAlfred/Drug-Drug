@@ -128,36 +128,26 @@ export default function Home() {
             </div>
 
             <div className={resultClassName} role="status" aria-live="polite">
-              {result ? (
-                <div>
-                <div className="results-heading">
+              <div className="results-heading">
                 <span className="results-level">{severityMeta.label}</span>
                 <span className="results-percent">{severityPercent}%</span>
-               </div>
+              </div>
               <p className="results-summary">{severitySummary}</p>
               <p className="results-hint">{reportsCopy}</p>
-               </div>
-              ):null}
               {severity?.matchedKeyword ? (
                 <p className="results-hint">
                   Matched keyword “{severity.matchedKeyword}” in FDA text.
                 </p>
-              ) : null} 
-              
+              ) : null}
+              <div className="results-body">
                 {result ? (
-                  <div className="results-body">
-                  <pre className="results-text">{
-                    (result === "openFDA returned error 404")? "The Drugs can be be taken together 😊.":(result)
-                      
-                  
-                    }</pre>
-                    </div>
+                  <pre className="results-text">{result}</pre>
                 ) : (
                   <span>
                     Results will appear here after you press <strong>Check Interaction</strong>.
                   </span>
                 )}
-              
+              </div>
             </div>
           </div>
         </div>
@@ -176,7 +166,7 @@ export default function Home() {
           <h3>What It Does</h3>
           <ul>
             <li>Accepts two drug names and checks for possible interactions</li>
-            <li>Classifies results into <strong>Safe</strong>, <strong>Moderate</strong>, <strong>Serious</strong>, <strong>Contraindicated</strong></li>
+            <li>Classifies results into <strong>Safe</strong>, <strong>Moderate</strong>, <strong>Serious</strong>, or <strong>Contraindicated</strong></li>
             <li>Displays clinically relevant information instantly</li>
             <li>No login or signup required</li>
           </ul>
@@ -222,7 +212,7 @@ export default function Home() {
           <h3>Technology Behind It</h3>
           <ul>
             <li>Next.js + TypeScript front-end with custom autocomplete</li>
-            <li>An DeepLearning model MLP for real-world interaction Prediction</li>
+            <li>An DeepLearning model MLP for real-world interaction Perdiction</li>
             <li>Server-side caching to keep responses fast and reliable</li>
             <li>Severity engine that maps regulatory language into clear scores</li>
           </ul>
