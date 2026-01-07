@@ -1,6 +1,7 @@
 // pages/api/check-external.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { runProviderCheck } from "../../lib/provider";
+import { POST } from "./predict/route";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -15,14 +16,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const result = await runProviderCheck(drugA, drugB);
+    const predictionResult = await POST(req, res);
+  
+    console.log("Prediction result:", predictionResult);
 
-    // Guarantee a proper JSON structure
+    // Check if prediction failed
+    if (predictionResult.error) {
+      console.warn("Prediction server error:", predictionResult.error);
+      // Continue with just the provider check result
+      return res.status(200).json({
+        ok: true,
+        result: result?.result ?? "No result text.",
+        raw: result?.raw ?? {},
+        source: result?.source ?? "unknown",
+        severity: result?.severity ?? null,
+        prediction: null,
+        predictionError: predictionResult.error,
+      });
+    }
+
+    // Both succeeded
     return res.status(200).json({
       ok: true,
       result: result?.result ?? "No result text.",
       raw: result?.raw ?? {},
       source: result?.source ?? "unknown",
       severity: result?.severity ?? null,
+      prediction: predictionResult.data ?? null,
     });
 
   } catch (err: any) {
