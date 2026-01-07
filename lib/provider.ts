@@ -100,9 +100,22 @@ export async function openfdaCheck(drugA: string, drugB: string): Promise<CheckR
     const url = `https://api.fda.gov/drug/event.json?api_key=${encodeURIComponent(apiKey)}&search=${search}&limit=${limit}`;
 
     const res = await fetch(url);
+    if (res.status === 404) {
+      const message =
+        "There were no interactions found. It does not necessarily mean that no interactions exist. Prediction returned no matching adverse-event reports for the requested combination.";
+      const finalSeverity: SeverityAssessment = { level: "none" };
+      const out: CheckResult = {
+        result: message,
+        source: "Model",
+        raw: { status: 404, body: await res.text().catch(() => null) },
+        severity: { ...finalSeverity, totalReports: 0 },
+      };
+      cacheSet(key, out, 60);
+      return out;
+    }
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
-      const r: CheckResult = { result: `openFDA returned error ${res.status}`, source: "openFDA", raw: txt };
+      const r: CheckResult = { result: `Prediction returned error ${res.status}`, source: "Model", raw: txt };
       cacheSet(key, r, 30);
       return r;
     }
@@ -262,11 +275,11 @@ export async function openfdaCheck(drugA: string, drugB: string): Promise<CheckR
       summary += `\n`;
     }
 
-    summary += `Note: this is an automated, non-clinical summary from openFDA records. For clinical decisions consult a professional and full databases.\n`;
+    summary += `Note: this is an automated, non-clinical summary from Model. For clinical decisions consult a professional .\n`;
 
     const out: CheckResult = {
       result: summary,
-      source: "openFDA",
+      source: "Model",
       raw: {
         meta: json?.meta ?? null,
         sample_count: returned.length,
@@ -325,7 +338,7 @@ function computeAggregateSeverity(
   }
 ): SeverityAssessment {
   if (!total || total <= 0) {
-    return { level: "none", percentage: 0 };
+    return { level: "none" };
   }
 
   // conservative escalation rules for death/life-threat
@@ -347,19 +360,19 @@ function computeAggregateSeverity(
   // minor: >=5%, moderate: >=20%, serious: >=50%, contra: >=75%
   console.log("computeAggregateSeverity:", { seriousLower, seriousPctLower });
   if (seriousLower >= 0.75) {
-    return { level: "contraindicated", percentage: Math.min(100, seriousPctLower), matchedLevel: "contraindicated" };
+    return { level: "contraindicated", matchedLevel: "contraindicated" };
   }
   if (seriousLower >= 0.50) {
-    return { level: "serious", percentage: Math.min(100, seriousPctLower), matchedLevel: "serious" };
+    return { level: "serious", matchedLevel: "serious" };
   }
   if (seriousLower >= 0.20) {
-    return { level: "moderate", percentage: Math.min(100, seriousPctLower), matchedLevel: "moderate" };
+    return { level: "moderate", matchedLevel: "moderate" };
   }
   if (seriousLower >= 0.05) {
-    return { level: "minor", percentage: Math.min(100, seriousPctLower), matchedLevel: "minor" };
+    return { level: "minor", matchedLevel: "minor" };
   }
 
-  return { level: "none", percentage: Math.min(100, seriousPctLower), matchedLevel: "none" };
+  return { level: "none", matchedLevel: "none" };
 
 }
 

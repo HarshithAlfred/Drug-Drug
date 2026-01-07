@@ -64,7 +64,7 @@ const KEYWORD_GROUPS: Array<{ level: SeverityLevel; keywords: RegExp[] }> = [
 
 export type SeverityAssessment = {
   level: SeverityLevel;
-  percentage: number; // 0 - 100
+  
   matchedLevel?: SeverityLevel;
   matchedKeyword?: string;
   matchedText?: string;
@@ -72,7 +72,6 @@ export type SeverityAssessment = {
 
 const DEFAULT_ASSESSMENT: SeverityAssessment = {
   level: "none",
-  percentage: 0,
 };
 
 export function weightToPercentage(weight: number) {
@@ -152,7 +151,7 @@ export function evaluateSeverityFromTexts(texts: Array<string | undefined | null
 
   return {
     level: finalLevel,
-    percentage: weightToPercentage(SEVERITY_WEIGHTS[finalLevel]),
+  
     matchedLevel: finalLevel,
     matchedKeyword: matchedInfo?.keyword,
     matchedText: matchedInfo?.text,
@@ -184,5 +183,5 @@ export const SEVERITY_DISPLAY_META: Record<SeverityLevel, { label: string; descr
 
 export function formatSeveritySummary(assessment: SeverityAssessment) {
   const meta = SEVERITY_DISPLAY_META[assessment.level];
-  return `${meta.label} — ${Math.round(assessment.percentage)}% of maximum severity. ${meta.description}`;
+  return `${meta.label} ${meta.description}`;
 }
