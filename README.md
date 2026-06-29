@@ -8,7 +8,22 @@ Next.js web application for quickly estimating potential interactions between tw
 - **Deterministic severity scoring** – the new `utils/severity.ts` helper scans FDA text for keywords (minor → contraindicated) and normalizes the weight into a 0–100% score.
 - **Color-coded feedback** – Severity badges and the About/legend section use the exact palette from the provided design, including gradient hero and animated background.
 - **Caching & resiliency** – openFDA responses are cached with `node-cache` to reduce rate-limit hits and keep the UI responsive.
-
+## Feature Extraction
+```
+| id                         | Unique identifier assigned to each drug in DrugBank.                           |
+| name                       | Official or generic name of the drug.                                          |
+| atc-codes                  | Standard codes that classify drugs based on their therapeutic use.             |
+| drug-interactions          | Drugs that may interact with this drug and affect its safety or effectiveness. |
+| label                      | Official prescribing information, including dosage, warnings, and usage.       |
+| food-interactions          | Foods or beverages that can influence the drug's absorption or action.         |
+| reactions                  | Reported adverse reactions or side effects associated with the drug.           |
+| snp-effects                | Effects of genetic variants (SNPs) on the drug's response or metabolism.       |
+| snp-adverse-drug-reactions | Genetic variants linked to increased risk of adverse reactions to the drug.    |
+| targets                    | Proteins or molecules that the drug acts on to produce its effect.             |
+| enzymes                    | Enzymes involved in the drug's metabolism or biochemical activity.             |
+| carriers                   | Proteins that bind and transport the drug within the body.                     |
+| transporters               | Membrane proteins that move the drug into or out of cells.                     |
+```
 ## Getting Started
 1. **Install dependencies**
    ```bash
